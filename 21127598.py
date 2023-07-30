@@ -2,36 +2,59 @@ import numpy as np
 import PIL
 import matplotlib.pyplot as plt
 import os
+import time
 
 def change_brightness(img, brightness):
+    start = time.time()
     brightness = np.clip(int(brightness), -255, 255)
     new_image = np.clip(img.astype(np.uint16) + brightness, 0, 255)
+    end = time.time()
+    
+    print("Brightness finished in: ", end - start)
     return new_image.astype(np.uint8)
 
 def change_contrast(img, contrast):
+    start = time.time()
     contrast = np.clip(float(contrast), -255, 255)
     factor = (259 * (contrast + 255)) / (255 * (259 - contrast))
     new_image = np.clip(factor * (img.astype(float) - 128) + 128, 0, 255)
+    end = time.time()
+    
+    print("Contrast finished in: ", end - start)
     return new_image.astype(np.uint8)
 
 def flip_image(img, dir=1):
+    start = time.time()
     if dir == 1:
-        return np.flip(img, axis=0).astype(np.uint8)
+        new_img = np.flip(img, axis=0).astype(np.uint8)
     else:
-        return np.flip(img, axis=1).astype(np.uint8)
+        new_img = np.flip(img, axis=1).astype(np.uint8)
+    end = time.time()
+    
+    print("Flipped in: ", end - start)
+    return new_img
     
 def grayscale_image(img):
-    return np.dot(img[..., :3], [0.3, 0.59, 0.11]).astype(np.uint8)
+    start = time.time()
+    new_img = np.dot(img[..., :3], [0.3, 0.59, 0.11]).astype(np.uint8)
+    end = time.time()
+    
+    print("Convert image to grayscale in: ", end - start)
+    return new_img
 
 def sepia_image(img):
+    start = time.time()
     sepia_matrix = np.array([[0.393, 0.769, 0.189],
                             [0.349, 0.686, 0.168],
                             [0.272, 0.534, 0.131]])
-    return np.clip(np.dot(img, sepia_matrix.T), 0, 255).astype(np.uint8)
+    new_img = np.clip(np.dot(img, sepia_matrix.T), 0, 255).astype(np.uint8)
+    end = time.time()
+    print("Convert image to sepia in: ", end - start)
+    return new_img
 
 def kernel_1d(size, sigma):
     x = np.linspace(-(size // 2), size // 2, size)
-    kernel = np.exp(-x**2 / (2 * sigma**2))
+    kernel = (1 / (np.sqrt(2 * np.pi) * sigma ** 2)) * np.exp(-x**2 / (2 * sigma**2))
     kernel /= np.sum(kernel)
     return kernel
 
@@ -41,6 +64,7 @@ def convolution_channel(channel, kernel):
     return result
 
 def blur_image(img, size, sigma):
+    start = time.time()
     kernel = kernel_1d(size, sigma)
     result = np.ones_like(img, dtype=np.float64) * 255
     
@@ -50,10 +74,12 @@ def blur_image(img, size, sigma):
     else:
         for c in range(img.shape[-1]):
             result[:, :, c] = convolution_channel(img[:,:,c], kernel)
-
+    end = time.time()
+    print("Blured image in: ", end - start)
     return np.uint8(result)
 
 def sharp_image(img, size, sigma):
+    start = time.time()
     identity = np.zeros(shape=size)
     identity[size//2] = 1
     kernel = 2*identity - kernel_1d(size, sigma)
@@ -66,9 +92,14 @@ def sharp_image(img, size, sigma):
             result[:, :, c] = convolution_channel(img[:,:,c], kernel)
         
     result = np.clip(result, 0, 255)
+    
+    end = time.time()
+    print("Sharpen image in: ", end - start)
     return np.uint8(result)
 
 def zoom_image(img, percentage):
+    start = time.time()
+    percentage = min(1.0, percentage)
     new_height = int(img.shape[0] * percentage)
     new_width = int(img.shape[1] * percentage)
     
@@ -82,11 +113,15 @@ def zoom_image(img, percentage):
     row_end = row_start + new_height
     
     if(img.shape[-1] == 3):
-        return img[row_start:row_end, col_start:col_end, :]
+        new_img = img[row_start:row_end, col_start:col_end, :]
     else:
-        return img[row_start:row_end, col_start:col_end]
-
+        new_img = img[row_start:row_end, col_start:col_end]
+    end = time.time()
+    print("Zoomed image in: ", end - start)
+    return new_img
+    
 def crop_circle(img):
+    start = time.time()
     center_x = img.shape[1] // 2
     center_y = img.shape[0] // 2
     y, x = np.ogrid[:img.shape[0], :img.shape[1]]
@@ -96,9 +131,12 @@ def crop_circle(img):
     mask = ((x - center_x)**2 + (y - center_y)**2) <= radius**2
     cropped_image = img.copy()
     cropped_image[~mask] = 0
+    end = time.time()
+    print("Cropped image into circle in: ", end - start)
     return cropped_image
 
 def crop_butterfly(img, elipse_size=8):
+    start = time.time()
     center_x = img.shape[1] // 2
     center_y = img.shape[0] // 2
 
@@ -120,6 +158,8 @@ def crop_butterfly(img, elipse_size=8):
     mask = np.logical_or(mask1, mask2)
     cropped_img = img.copy()
     cropped_img[~mask] = 0
+    end = time.time()
+    print("Cropped image into butterfly shape in: ", end - start)
     return cropped_img
 
 def save_img(img, filepath, suffix):
@@ -127,11 +167,12 @@ def save_img(img, filepath, suffix):
     
     file_name = os.path.splitext(os.path.basename(filepath))[0]
     os.makedirs('./output/', exist_ok=True)
-    output_img.save('./output/' + file_name + suffix + '.png')
+    output_img.save('./output/' + file_name + '_' + suffix + '.png')
 
 def main():
     file_path = input("Enter file path: ")
     image = PIL.Image.open(file_path)
+    image = image.convert("RGB")
     img = np.array(image, dtype=np.uint8)
     original_img = img.copy()
     
@@ -147,12 +188,13 @@ def main():
         print("7: Sharpen image")
         print("8: Zoom image")
         print("9: Crop image into a circle")
+        print("10: Crop image with a butterfly mask")
         choose = int(input("Enter your selection (-1 to quit, 0 to run all): "))
         
         if(choose == 1):
             brightness = int(input("Enter the brightness: "))
             new_img = change_brightness(original_img, brightness=brightness)
-            save_img(new_img, file_path, 'bright')
+            save_img(new_img, file_path, 'brightness')
         elif(choose == 2):
             contrast = float(input("Enter the contrast (-255, 255): "))
             new_img = change_contrast(original_img, contrast=contrast)
@@ -189,6 +231,10 @@ def main():
             print("Cropping image into a circle")
             new_img = crop_circle(img)
             save_img(new_img, file_path, 'circle')
+        elif(choose == 10):
+            size = int(input("Enter elipse size (recommend 8): "))
+            new_img = crop_butterfly(img, size)
+            save_img(new_img, file_path, 'butterfly')
         elif(choose == 0):
             print("Running all features from 1 -> 9")
             
@@ -231,8 +277,11 @@ def main():
             print("Cropping image into a circle")
             new_img = crop_circle(original_img)
             save_img(new_img, file_path, 'circle')
+            
+            size = int(input("Enter elipse size (recommend 8): "))
+            new_img = crop_butterfly(original_img, size)
+            save_img(new_img, file_path, 'butterfly')
         
-            
-            
+                  
 if __name__ == '__main__':
     main()
